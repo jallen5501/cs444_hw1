@@ -1,0 +1,76 @@
+Using remote gdb without multiple windows (and do you need to?)
+
+This file is for students of cs241, cs641, and others who need to 
+debug SAPC programs via dialin from simple communications programs
+or terminals.  If you can use telnet or other network access, simply
+connect twice and use the two windows as covered in $pcex/gdb.script.
+This file assumes you cannot connect twice because you are dialing
+in with a modem over one phone line without PPP, and thus have only
+one window to work in. 
+
+Examples of systems and their choices:
+Simple terminal: can only connect with modem.  Read this file.
+DOS or Windows 3.1 system: can only run a "comm" program for a modem.
+  Read this file or upgrade your system.
+MacIntosh system, versions below 7.5: can only run a terminal program.
+  Read this file or upgrade your system.
+Windows 95, Windows 98, Windows NT, MacIntosh v. 7.5+: you can run PPP
+and get an account at UMB or with an ISP, then run multiple windows.
+UMB modems are overloaded however.  
+
+An ISP is an "independent service provider" who runs a set of modems
+and charges say $20/month to provide Internet access to you.
+Once you have Internet access, you can reach ulab by telnet'ing to
+ulab.cs.umb.edu.
+
+PPP is "point to point protocal", a way of extending the Internet to
+your machine over a modem line.  It's the best way to use a phone line
+and modem for Internet access.  The only thing better in common use
+is a "cable modem", available for $40/month in some areas.  These
+methods are equally good for coursework, but cable modem is much
+better for web browsing (much faster downloads.)
+
+If you have PPP but are new to it, see www.cs.umb.edu/~eoneil for a
+link to a page on multiwindow access setup.
+
+Even if you can't run PPP, you may want to arrange with an ISP to get
+a "shell" account, then login with the ISP and telnet to UMB.  That way
+you aren't closed out when the UMB modems go busy.
+
+OK, so you have an old machine that only works like a simple terminal.
+You can still use remote gdb if you are very careful.
+
+1. Check that your .login allows control-Z for C-shell job control.
+
+Find these lines in your .login:
+  # Comment out the following to ENABLE normal job control action with ^Z, but
+  # only after you know about processes and the ps, jobs and kill commands!
+  stty susp '^_'
+Follow the directions and comment out (or delete entirely) the stty command.
+
+2. Logout and in again to establish job control.  Experiment a little
+with it:
+Do "mtip"  and in a few seconds, control-Z to get back to the shell.
+Do "jobs" to see it. Do "ps" as well and see the two processes of the
+one job.  Do "fg" (foreground) to get back to it.  Do "bg" after control-Z
+to let it execute in the background.  Do "%1" to connect to job 1, etc.
+Get two jobs going, say 1 and 2.  Then "%%" connects to the last one used,
+while "%1" and "%2" connect by number. 
+
+3. Once you have the idea of C job control, time to try it out for
+remote gdb.  Find a free remgdb system, say #4.
+a. run mtip -b 4 -f prog.lnx, download, gdb command as in gdb.script.
+b. control-Z this job, bg it
+c. i386-gdb prog.lnx, tar rem /dev/remgdb4, should connect
+  Debug it just like gdb.script, except when you need to enter input,
+  you need to carefully switch to the mtip job, do the input, and switch
+  back:
+i.   control-Z this remgdb job, bg it
+ii.  reconnect to the mtip job: "jobs" then "%1" for example.
+     do the input.  The program will run until it hits a breakpoint
+     or finishes.
+iii. control-Z this mtip job, bg it.  Reconnect to the i386-gdb job.
+     You will be at the breakpoint or end of program.  You can restart
+     it with "set $eip=0x100100" followed by "c".
+
+See $pcex/gdb-onewindow.script for a script.

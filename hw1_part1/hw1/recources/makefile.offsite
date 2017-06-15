@@ -1,0 +1,77 @@
+# makefile for use off-site: rebuild on ulab before running!
+# Set up ../include with include files from ulab:
+#  cd ..
+#  mkdir include
+#  cd include
+#  pscp user@linux1.cs.umb.edu:/groups/ulab/pcdev/include/* .
+
+# makefile for building C or assembly language programs for the
+# Standalone 486 or Pentium IBM PC running in 32-bit protected mode, 
+# or "SA PC" for short.
+# Single-source-file makefile--needs editing for multiple-module programs
+
+# For a C source, say myprog.c, override the "C=ctest" below by
+#  setting C in the make command line: "make C=myprog myprog.lnx"
+#  or just "make C=myprog", since $(C).lnx is the first make target.
+#  Then myprog.lnx is ready for downloading via "mtip -f myprog.lnx"
+#  (followed by ~r and ~d inside the mtip program)
+C = ctest
+
+# For an assembler source, say myprog.s, override the "A=atest" below by
+#  setting A in the make command line: "make A=myprog myprog.lnx"
+#  Then myprog.lnx is ready for downloading via "mtip -f myprog.lnx"
+#  (followed by ~r and ~d inside the mtip program)
+A = atest
+
+# also "make clean" to clean up non-source files in a directory
+
+# system directories needed for compilers, libraries, header files--
+# assumes the environment variables SAPC_TOOLS, SAPC_GNUBIN, and SAPC_SRC
+# are set up, usually by the ulab module
+SAPC_TOOLS = ..
+PC_LIB = $(SAPC_TOOLS)/lib
+PC_INC = $(SAPC_TOOLS)/include
+
+WARNINGS =  -Wall -Wstrict-prototypes -Wmissing-prototypes \
+		-Wno-uninitialized -Wshadow -pedantic \
+		-D__USE_FIXED_PROTOTYPES__
+
+PC_CC   = gcc
+PC_CFLAGS = -g $(WARNINGS) -I$(PC_INC) -fno-builtin-putc
+# add to PC_CFLAGS if you see too many warnings:
+# -fno-builtin-fputc  -fno-builtin-fputs  -fno-builtin-fprintf
+
+# not in use in off-site builds, except implicitly by gcc for test.c:
+PC_AS   = as
+PC_LD   = ld
+PC_NM   = nm
+
+# File suffixes:
+# .c	C source (often useful both for UNIX host and SAPC)
+# .s 	assembly language source
+# .opc  relocatable machine code, initialized data, etc., for SA PC,
+# or, if portable, for another OS too (only test.c is portable)
+
+all: echo.opc debounce.opc gettime.opc lptest.opc test.exe timer.opc timetest.opc typewr.opc
+
+# Offsite: we can only do test compiles here for SAPC: transfer your
+# .c files to ulab for full builds for SAPC execution
+# (the executable for test.c can run here, see targets below)
+# tell gcc to use $(PC_INC) for #include <...> headers--
+$(C).opc: $(C).c
+	$(PC_CC) $(PC_CFLAGS) -I$(PC_INC) -c -o $(C).opc $(C).c
+
+# test.c, our one portable program: the conventional executable name 
+# varies between Windows and UNIX/Linux:
+
+# Windows:
+test.exe: test.c
+	$(PC_CC) test.c -o test.exe
+
+# UNIX/Linux/Mac: call it test1 to avoid confusion with the standard
+# UNIX command "test"
+test1: test.c
+	$(PC_CC) test.c -o test1
+
+clean:
+	rm -f *.opc test.exe test1

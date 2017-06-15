@@ -1,0 +1,168 @@
+Annotated script of simple remote gdb debugging session
+  This assumes you can use multiple windows, the easy case.  If you
+  can only use one window, see gdb-onewindow.txt and gdb-onewindow.script.
+
+Note these points shown here:
+--after initial setup, the mtip window is used only for seeing current
+  output and entering *program* input.  The gdb window is used for all
+  debugging commands--it's running the show.
+--Program output shows on both windows, if it is "CONSOLE" output such
+  as printf, putchar, etc.  However, each line of output is buffered
+  until a newline is output, so sometimes you hit a breakpoint with
+  not all the expected output in the gdb window yet.  In such cases,
+  look at the mtip window to see the full current output picture.
+--Program input needs to be done in the mtip window.
+
+------mtip window-----------------------------------------
+ulab(1)% mtip -b 6 -f test.lnx
+For command help, type ~?
+For help on args, rerun without args
+Code starts at 0x100100
+Using board # 6 
+
+Tutor>                 <----user did <CR> to see Tutor prompt.  If necessary,
+				do ~r here to reset the board.
+~downloading test.lnx   <---user typed ~d here to download test.lnx
+Calling loadprog()
+.......Done.
+
+Download done, setting EIP to 100100.
+Tutor> gdb
+Setting gdb dev to COM1, starting gdb (CTRL-C to abort).
+                                 <---mtip session "hangs" here, that's 
+					normal--it's waiting on commands
+					from its gdb connection.
+------gdb window-----------------------------------------
+ulab(1)% 
+ulab(1)% i386-gdb test.lnx
+GDB is free software and you are welcome to distribute copies of it
+ under certain conditions; type "show copying" to see the conditions.
+There is absolutely no warranty for GDB; type "show warranty" for details.
+GDB 4.15.1 (sparc-sun-sunos4.1.3 --target i386-linuxaout), 
+Copyright 1995 Free Software Foundation, Inc...
+(gdb) tar rem /dev/remgdb6           <---remote gdb line for board 6
+Remote debugging using /dev/remgdb6
+0x100100 in /groups/ulab/devhost/lib/startup0.opc ()
+(gdb) set $eip = 0x100100             <----set EIP (PC) at start of program
+(gdb) b main                          <---start of normal debugging, set bkpt
+Breakpoint 1 at 0x1002df: file test.c, line 10.
+(gdb) c
+Continuing.
+
+Breakpoint 1, main () at test.c:10
+10	  a = 3;
+(gdb) l
+5	{
+6	  char ch;
+7	  char buf[80];
+8	  int a;
+9	
+10	  a = 3;
+11	  printf("\nWelcome to C on this machine, whatever it is\n\n");
+12	  printf("%s, %s, %d, %d, %d...\n",msg,msg,1,2,a);
+13	  printf("Single-char input test using getchar:\n");
+14	  printf("Now enter a char: ");
+(gdb) b 14
+Breakpoint 2 at 0x10031f: file test.c, line 14.
+(gdb) c
+Continuing.
+
+Welcome to C on this machine, whatever it is    (also shows in mtip window)
+
+testing, testing, 1, 2, 3...                    (also shows in mtip window)
+Single-char input test using getchar:           (also shows in mtip window)
+
+Breakpoint 2, main () at test.c:14
+14	  printf("Now enter a char: ");   <-----note this output string
+						doesn't show in gdb yet
+						because there's no '\n' at
+						its end to force it out
+						(it's still buffered up)
+						It does show in mtip window.
+(gdb) l
+9	
+10	  a = 3;
+11	  printf("\nWelcome to C on this machine, whatever it is\n\n");
+12	  printf("%s, %s, %d, %d, %d...\n",msg,msg,1,2,a);
+13	  printf("Single-char input test using getchar:\n");
+14	  printf("Now enter a char: ");
+15	  ch = getchar();
+16	  printf("\nIf running without an OS, note how it was picked up and used\n before you typed <CR>.\n");
+17	  printf("\nIf running with an OS, note how it waited until you typed <CR>.\n");
+18	  printf("Here it is, via putchar: ");
+(gdb) b 16
+Breakpoint 3 at 0x100336: file test.c, line 16.
+(gdb) c
+Continuing.
+----------------mtip window: user enters input here
+Now enter a char: a
+----------------back to gdb window, where breakpoint is hit
+Breakpoint 3, main () at test.c:16
+16	  printf("\nIf running without an OS, note how it was picked up and used\n before you typed <CR>.\n");
+(gdb) n
+Now enter a char: a         <---finally see this buffered output when \n output
+If running without an OS, note how it was picked up and used
+ before you typed <CR>.
+17	  printf("\nIf running with an OS, note how it waited until you typed <CR>.\n");
+(gdb) n
+
+If running with an OS, note how it waited until you typed <CR>.
+18	  printf("Here it is, via putchar: ");
+(gdb) n
+19	  putchar(ch);
+(gdb) n
+				   <--here see ch-value only in mtip window
+20	  printf("\nMultiple-char input test using scanf:\n");
+(gdb) n
+Here it is, via putchar: a         <---buffered output shows up here
+Multiple-char input test using scanf:
+21	  printf("Now enter a word: ");
+(gdb) l
+16	  printf("\nIf running without an OS, note how it was picked up and used\n before you typed <CR>.\n");
+17	  printf("\nIf running with an OS, note how it waited until you typed <CR>.\n");
+18	  printf("Here it is, via putchar: ");
+19	  putchar(ch);
+20	  printf("\nMultiple-char input test using scanf:\n");
+21	  printf("Now enter a word: ");
+22	  scanf("%s",buf);
+23	  printf("\nscanf got %s\n",buf);
+24	  printf("\nNow enter a number: ");
+25	  scanf("%d",&a);
+(gdb) l
+26	  printf("\nscanf got %d\n",a);
+27	}
+(gdb) b 26
+Breakpoint 4 at 0x1003c4: file test.c, line 26.
+(gdb) c
+Continuing.
+Now enter a word: xxx          <----this was entered in mtip window
+scanf got xxx    
+
+Now enter a number: 12         <----this was entered in mtip window
+
+Breakpoint 4, main () at test.c:26
+26	  printf("\nscanf got %d\n",a);
+(gdb) n
+
+scanf got 12
+27	}
+(gdb) where
+#0  main () at test.c:27
+#1  0x100122 in startupc () at startup.c:7
+(gdb) p a
+$1 = 12
+(gdb) c             <---let program finish
+Continuing.
+
+Program received signal SIGTRAP, Trace/breakpoint trap. <---normal exit hits
+							    built-in breakpoint
+startupc () at startup.c:4
+4	{
+(gdb) q
+The program is running.  Quit anyway (and kill it)? (y or n) y
+ulab(2)% exit
+exit
+
+script done on Fri Jan 17 21:32:32 1997
+
+script done on Fri Jan 17 21:32:32 1997

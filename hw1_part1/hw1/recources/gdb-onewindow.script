@@ -1,0 +1,161 @@
+Script started on Sun Oct  4 22:28:22 1998
+ulab(1)% mtip -g[Kb 5 -f test.lnx
+For command help, type ~?
+For help on args, rerun without args
+Code starts at 0x100100
+Using board # 5 
+
+Tutor> ~downloading test.lnx
+Calling loadprog()
+.......Done.
+
+
+Download done, setting EIP to 100100.
+Tutor> gdb
+Setting gdb dev to COM1, starting gdb (CTRL-C to abort).
+            <---did control-Z here
+Suspend handler: Suspending mtip, board #5--please return to it (fg command) as soon as possible
+
+Suspended
+ulab(2)% bg                   <---important, keep it running
+[1]    mtip -b 5 -f test.lnx &
+ulab(3)% Continuing mtip on board 5
+
+[1]  + Suspended (tty output)        mtip -b 5 -f test.lnx
+ulab(3)% i386-gdb test.lnx
+GDB is free software and you are welcome to distribute copies of it
+ under certain conditions; type "show copying" to see the conditions.
+There is absolutely no warranty for GDB; type "show warranty" for details.
+GDB 4.15.1 (sparc-sun-sunos4.1.3 --target i386-linuxaout), 
+Copyright 1995 Free Software Foundation, Inc...
+(gdb) tar rem /dev/remgdb5
+Remote debugging using /dev/remgdb5
+0x100100 in /groups/ulab/pcdev/lib/startup0.opc ()
+(gdb) l main
+1	/* program to show that normal C i/o works on the SA PC */
+2	#include <stdio.h>
+3	char msg[] = "testing";
+4	void main()
+5	{
+6	  char ch;
+7	  char buf[80];
+8	  int a;
+9	
+(gdb) l
+10	  a = 3;
+11	  printf("\nWelcome to C on this machine, whatever it is\n\n");
+12	  printf("%s, %s, %d, %d, %d...\n",msg,msg,1,2,a);
+13	  printf("Single-char input test using getchar:\n");
+14	  printf("Now enter a char: ");
+15	  ch = getchar();
+16	  printf("\nIf running without an OS, note how it was picked up and used\n before you typed <CR>.\n");
+17	  printf("\nIf running with an OS, note how it waited until you typed <CR>.\n");
+18	  printf("Here it is, via putchar: ");
+19	  putchar(ch);
+(gdb) b 17
+Breakpoint 1 at 0x100343: file test.c, line 17.
+(gdb) c
+Continuing.
+
+Welcome to C on this machine, whatever it is  <--duplicated output
+
+testing, testing, 1, 2, 3...
+Single-char input test using getchar:    <---hanging, waiting for input
+  <---did control-Z here
+Suspended
+ulab(10)% bg                    <--don't forget
+[2]    i386-gdb test.lnx &
+ulab(11)% %1
+mtip -b 5 -f test.lnx
+Continuing mtip on board 5
+
+Welcome to C on this machine, whatever it is  <-- the "real" output
+
+testing, testing, 1, 2, 3...
+Single-char input test using getchar:
+Now enter a char: aNow enter a char: a     <--real and dup'd output, entered 'a'
+
+If running without an OS, note how it was picked up and usedIf running without an OS, note how it was picked up and used
+
+ before you typed <CR>. before you typed <CR>.
+
+
+Breakpoint 1, main () at test.c:17
+17	  printf("\nIf running with an OS, note how it waited until you typed <CR>.\n");
+Suspend handler: Suspending mtip, board #5--please return to it (fg command) as soon as possible
+    <----did control-Z here
+Suspended
+[2]  - Suspended (tty output)        i386-gdb test.lnx
+ulab(12)% bg
+[1]    mtip -b 5 -f test.lnx &
+ulab(13)% Continuing mtip on board 5
+jobs
+[1]  + Suspended (tty output)        mtip -b 5 -f test.lnx
+[2]  - Suspended (tty output)        i386-gdb test.lnx
+ulab(14)% %2
+i386-gdb test.lnx
+(gdb) #0  main () at test.c:17
+#1  0x100122 in startupc () at startup.c:7
+(gdb) 
+Suspended
+ulab(15)% fg
+i386-gdb test.lnx
+(gdb) (gdb) i line     <---making sure it's at line 17 as expected
+Line 17 of "test.c" starts at address 0x100343 <main+111>
+   and ends at 0x100350 <main+124>.
+(gdb) i loc
+ch = 97 'a'
+buf = "x\a\020\000\000\000\000\000\000\000\000\000ÿÿÿÿ\000\000\000d\001\000\000\000\000\000\000\000\217ÿ?\000\217ÿ?\000L\001\020\000Ðÿ?\000g\a\020\000$\001\020\000àÿ?\000ü\002\020\000d\000\000\000àÿ?\000j\001\020\000$\001\020\000\000\000\000a"
+a = 3
+(gdb) c
+Continuing.
+
+If running with an OS, note how it waited until you typed <CR>.
+Here it is, via putchar: a
+Multiple-char input test using scanf:
+ <----hanging for input again, did control-Z
+Suspended
+ulab(16)% bg
+[2]    i386-gdb test.lnx &
+ulab(17)% %1
+mtip -b 5 -f test.lnx
+Continuing mtip on board 5
+
+If running with an OS, note how it waited until you typed <CR>.
+Here it is, via putchar: a
+Multiple-char input test using scanf:
+Now enter a word: zzzNow enter a word: zzz
+
+
+
+scanf got scanf got zzz
+zzz
+
+
+Now enter a number: 55Now enter a number: 55
+
+
+
+scanf gotscanf got 55
+ 55
+
+Program received signal SIGTRAP, Trace/breakpoint trap.  <--gdb complaining
+					about the int $3 it didn't plant
+startupc () at startup.c:4
+startup.c:4: No such file or directory.
+~q 
+Quit handler: Leaving board #5
+[2]  + Suspended (tty output)        i386-gdb test.lnx
+ulab(27)% %2
+i386-gdb test.lnx
+(gdb) The program is running.  Quit anyway (and kill it)? (y or n) 
+Suspended
+ulab(28)% jobs
+[2]  + Suspended                     i386-gdb test.lnx
+ulab(29)% %2
+i386-gdb test.lnx
+
+ulab(30)% exit
+exit
+
+script done on Sun Oct  4 22:35:44 1998

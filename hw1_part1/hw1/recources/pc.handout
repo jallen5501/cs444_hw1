@@ -1,0 +1,292 @@
+Note: This file has been turned into a web page linked from
+www.cs.umb.edu/ulab as "SAPC Programming Environment".
+
+
+  The 32-bit Protected-mode SAPC Program Execution Environment
+     and SAPC C library programming support
+
+Memory
+
+The SAPCs have 4Mbytes (or more) of memory set up at boot time to provide
+a "flat" 32-bit protected mode memory space.  It looks like this,
+for a 4M system:
+
+32-bit address space:  all numbers are hex: 0x100000 = 1M, highest
+possible address is 0xffffffff, 32 bits of 1's.
+
+--increasing memory addresses--->
+
+|----------------|---------------------------------|---- ... ----------|
+0               00100000                          00400000          ffffffff
+<----------4M RAM=read/write memory----------------><----Nothing yet--->
+<--1M sys area-->|<-----------3M user memory------->
+
+The system area is the first 1M of memory.  Because historically (in PC
+history, back in the 80's) everything was in a 1M area, today all the 
+hardware-related memory areas lie in this first 1M.  We have put Tutor
+in the usable RAM below the video memory in the first 1M so that the
+user program gets a contiguous block of 3M of RAM above the system area.
+You can use the memory below Tutor, but 3M should be enough for any project
+we have.
+
+System area in first 1M of memory: note not to scale.
+
+<----640K memory------------->      video   
+   bootstrap RAM -Tutor-            memory          BIOS ROM| user memory
+|--|--|--|---|---|----|---||||-----|-----|---|--|--|--------|----->
+0                50000       a0000 b0000 c0000     f0000    100000
+
+We (at UMB) have chosen the address 100100 to be the starting address for
+code downloaded to the PCs--this could be changed if needed for a particular
+application.  We normally use the upper end of memory below 400000
+for the program stack.  When doing ordinary applications, the programmer
+can simply ignore the first 1M and trust the C library to do the
+necessary things to make the I/O happen.
+
+User program layout on the PC:
+
+                  code  data                <--stack
+|----------------|----------------------------------|---- ... ----------|
+0                100000      user memory           400000             ffffffff
+
+
+What does it mean to "reset" the PC?
+
+Once your program is downloaded and started, it runs in this environment
+completely independently of UNIX and largely independently of Tutor.
+(Tutor does provide useful code for I/O that is called from the C library.)
+You have the final authority to reset the PC (~r in mtip) at any time,
+and this is recommended practice early and often--do it first thing when
+you get assigned a board by mtip, to undo anything the last student
+did.  Elsewhere we explain how this works, but here we are concentrating
+on the PC-local environment, so we simply say that doing the ~r
+causes an electrical signal to be applied to the PC's reset logic,
+just as if you had pressed the reset button on the front of the system.
+This causes the x86 CPU to go into a "reset cycle", forgetting everything
+it knew and starting over from scratch, in "real mode" and runs the
+ROM BIOS code, that reads the floppy disk and brings Tutor into
+memory.  With the help of an intermediate step, Tutor is started
+up in protected mode, also from scratch--no breakpoints set, for example.
+
+Resetting the PC wipes clean all of its memory.  You'll need to
+download your program again after you do a reset.
+
+One CPU, two programs...
+
+Now here's the tricky part.  Both Tutor and your program run using
+one CPU.  How can Tutor display your program's registers while itself
+using them?  By saving them at the moment it gets control, using them
+itself, and restoring them back when it hands the CPU back to your
+program.  While your program is running after go 100100 for example,
+the main part of Tutor has no control of it at all until it hits a 
+breakpoint or exits back to Tutor.  It simply executes on its own in 
+the above memory environment.  The only way Tutor can be made to hold 
+close attention to every instruction is to use trace mode with the
+"t" command.  Then Tutor sets the trace bit in the x86's EFLAGS 
+register, which tells the CPU to do only one instruction and then 
+trap back, to Tutor.
+
+Similarly, remote gdb and your program trade off the same way.
+In fact Tutor can be thought of as a software veneer over the core
+remote gdb code.
+
+Thus in the final analysis, a normal program execution does not involve
+the main part of Tutor/remgdb at all until it is done--then it traps 
+back to Tutor/remgdb so you can re-run it or whatever.  The console 
+i/o is done by calling into Tutor's code, which in turn uses the i/o 
+ports of the basic hardware via the in and out instructions.  However 
+this passive sharing of code is just an efficiency--we could download a
+copy of this code (it's all in C) and have only downloaded code
+execute between breakpoints, but then the downloads would take longer.
+
+   Differences between standard C and the SAPC C environment
+
+The fact that we can write lots of useful programs which run identically
+on UNIX and these stripped-down PCs is a testament to the portability
+of C programs.  However, several restrictions must be kept in mind.
+
+1. No FILE support:  these PCs have no secondary storage--disk or tape--
+for nonvolatile file storage, except for the floppy disk that holds
+Tutor, so we have simply removed all the FILE support from the C library.
+(However, we can "fprintf" to various devices on the system, see below.)
+
+2. No command line args (argc, argv): there is no shell program to collect 
+them and feed them to the user program.  We could simulate it if we wanted.
+
+3. Other missing C library routines: malloc, bcopy, etc.--we could fix this
+too by implementing them.  All of the really common ones are there--printf,
+scanf, strcpy, putchar, getchar, gets, memcpy, etc.  You can scan the source
+directory and grep for your favorites--"cd $pclibsrc" assuming you have
+the ulab module loaded.
+
+If you see bcopy reported as an undefined symbol by the loader ld,
+but you didn't yourself use one of them, it means that C has decided to use
+it to copy initial values into an array or big struct.  In all cases
+that the author has observed, the trouble-causing code was unnecessarily
+CPU-expensive and easily changed to run faster without bcopy.
+
+4. Simplified printf and scanf, so they don't take forever to download: 
+no support for float formats, width specifications.  You can use floats
+and doubles in your code, just convert them to int before using them with
+printf.
+
+5. Reruns of a downloaded program.  Although an initialization in an
+external definition is effective, it only works for the first run of
+the program:  "int i = 0;" outside of any function makes the variable
+i start off at 0 just after the program is downloaded and started,
+but that execution may leave it at 5.  Then a second "go 100100" will
+start it off at 5.  So you see that it is best to initialize variables
+by explicit assignment statements, "i=0;" for rerunability on the SAPC.
+Think of this when you see your program act differently on reruns than
+original runs.  On the other hand, uninitialized external variables are
+cleared (set to all-0s) for each run or rerun.  Example of uninitialized
+external variables are "int i;" outside any function, and
+"struct foo[MAXFOOS];" outside any function.  However, it is still a good
+idea to explicitly initialize all such variables, as well as all local
+variables, which commonly have non-0 garbage values initially.
+
+   Device Support in the SAPC library.
+
+When you include stdio.h in your program on a proper OS, you get prototypes
+and definitions supporting printf, scanf, fprintf, fscanf, putchar,
+getchar, gets, fgets, puts, fputs, and many other FILE *functions and 
+stdin/stdout functions.
+
+When you include stdio.h in the SAPC environment, you get prototypes
+and definitions supporting:
+
+int getchar(void);
+int putchar(int ch);
+char * gets(char *s);
+int puts(const char *s);
+int printf(const char* format, ...);
+int scanf(const char* format, ...);
+
+i.e., the common stdin/stdout functions.  In addition, the commonly used
+FILE* functions fprintf and fgets are available with device numbers
+in the place of the FILE * argument:
+
+fprintf(int dev, const char * format, ...);
+char *fgets(char *line, int maxline, int dev);
+
+If you want to use fscanf, just get the whole line with fgets and then use
+sscanf--this works better anyway because scanf and fscanf pay no attention
+to end-of-line and so their use tends to cause line synchronizaton problems.
+
+
+	SAPC C library device numbers
+
+The SAPC device numbers are as follows, and are #defined in sysapi.h, which is
+included from stdio.h, so all you need to do is #include <stdio.h> to get
+their definitions:
+
+device 0: KBMON, combination of PC keyboard for input and monitor for output
+device 1: COM1, first serial port
+device 2: COM2, second serial port
+device 100: CONSOLE, standing for whatever device Tutor is using as its console
+
+Thus you can send "hi" out the COM1 port with "fprintf(COM1,"hi") and read
+a line from the keyboard with fgets(buf, MAXBUF, KBMON).  You can send "hi"
+to the current console with either printf("hi") or fprintf(CONSOLE,"hi").
+
+The following two devices only work on mtip systems 5 and 6, and are "looped 
+back", that is, the output line from COM3 is connected to the input line on 
+COM4 and vice versa.
+device 3: COM3, third serial port
+device 4: COM4, fourth serial port
+
+
+	Platform dependent code and the SAPC symbol
+
+The SAPC preprocessor symbol is #define'd in the stdio.h in $pcinc.  Since
+it is *not* #define'd in the ordinary UNIX stdio.h, we have an easy way to
+do conditional compilation, where some lines of code are only used on the 
+SAPCs, others just on UNIX.
+
+Example: platform-independent getline function
+
+/* Turn the platform-dependent fgets library function calls into a 
+   platform-independent function to get one line from the user.
+*/
+void getline(char *buf, int maxbuf)
+{
+#ifdef SAPC
+    fgets(buf, maxbuf, CONSOLE);  /* this line is compiled for SAPC code */
+#else
+    fgets(buf, maxbuf, stdin);    /* this line is compiled for UNIX code */
+#endif
+}
+
+	ADVANCED FEATURES
+
+	The Low-level System Interface--calls into Tutor code
+
+You can do most programming with the standard C or nearly-standard C
+functions described above.  Sometimes, however, you may need to use the
+lower-level calls described here.  However, these should always be
+under #ifdef SAPC conditional compilation, because they make your code
+non-portable.
+
+The important low-level functions (from sysapi.h, thus available via
+#include <stdio.h>) are:
+
+/* get device number of current console (the one Tutor is using) */
+int (*get_console_dev)(void);
+
+/* set console to a certain device */
+void (*set_console_dev)(int dev);
+
+/* putc: output one char by polling, with lf->crlf, CONSOLE->console_dev */
+int putc(int dev,char ch);
+
+/* rawputc: output one char, by polling or equivalent, no interpretation
+ * of char, but CONSOLE->console_dev mapping provided */
+int rawputc(int dev, char ch);
+
+/* getc: get one char from device by polling or equiv., convert CR
+ * to '\n', echo if CONSOLE */
+int getc(int dev);
+
+/* rawgetc: get one char from device by polling or equiv., no interp. of
+ * char, but CONSOLE->console_dev mapping provided */
+int rawgetc(int dev);
+
+/* readyc: check if char ready to be getc'd (returns Boolean),
+ * with CONSOLE->console_dev mapping */
+int readyc(int dev);
+
+In addition to the console device shared with Tutor (COM2 for mtip systems), 
+there are two more special devices: the debugline used for remote gdb (COM1
+for mtip systems), and the "hostline" device (also COM2 for mtip systems),
+the serial line from a PC to a UNIX host running mtip.  The only extra
+service for the hostline is a delay for every output character implemented
+in the downloaded library code for putc, to protect the UNIX host from
+being flooded with too-fast input from the online PCs.
+
+The guts of these functions are implemented in Tutor code.  The downloaded
+library code checks arguments, does the delay on putc if outputting the the
+hostline, and then calls into the Tutor code via a big function pointer array
+(a "dispatch table") in the Tutor data area.
+
+The CONSOLE device is used for putchar, getchar, printf, scanf, etc.,
+so that putchar(char ch) is just "putc(CONSOLE, ch);" and getchar()
+is just "return getc(CONSOLE);" 
+Two of the most commonly used FILE * functions are available using device 
+numbers instead of FILE *s.:
+
+fprintf(int dev, const char * format, ...);
+char *fgets(char *line, int maxline, int dev);
+
+
+Hardware Programming Support
+
+In addition to the i/o functions discussed above, there are functions
+to help with direct hardware programming in the SAPC library.
+
+--in and out instructions, special CPU registers, caching:  see $pcinc/cpu.h
+--serial interface programming: see $pcinc/serial.h
+--parallel interface programming: see $pcinc/lp.h
+--timer (programmable interval timer) programming: see $pcinc/timer.h
+--interrupt programming: see $pcinc/pic.h, and cpu.h
+--memory management, L2 caching: see $pcinc/mmu.h
+

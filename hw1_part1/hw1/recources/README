@@ -1,0 +1,43 @@
+README for SAPC examples directory
+
+This directory has several simple C programs that run on the SAPC, and
+one, test.c, that is portable between UNIX and SAPC.  Each program
+has just one source file, and the SAPC executable can be built
+using the makefile here by the commmand "make C=prog", for example
+"make C=timetest" to compile timetest.c to timetest.lnx, the SAPC
+executable ready for downloading.
+
+To download timetest.lnx, for example, login to host ulab,
+and run mtip: "mtip -f timetest.lnx" for example.  Then if typing
+<CR> shows you a Tutor> prompt, just use ~d to get the download going.
+After the little row of dots, you should have the program in SAPC memory.
+At the subsequent Tutor> prompt, type "go 100100" to run the program.
+Finally, to leave mtip, type ~q.
+
+Note: for more documentation on SAPCs, visit www.cs.umb.edu/ulab.
+
+Test programs. (For assembler examples, see ../pcbook)
+
+test.c: Fancy "hello world" program, showing user input and output via
+        standard C library calls.  Use "gcc test.c" to compile for UNIX.
+
+Hardware-accessing programs with no interrupts
+echo.c: echo typed in chars, if console is a COM line, using direct
+        access to the UARTs.
+gettime.c: get the time from the real time clock and display it.
+testlp.c: output a pattern on the parallel port.
+timer.c: display the counts in the PIT, programmable interval timer.
+
+Programs with Interrupts
+timetest.c: Get the PIT ticking, printing a * on each tick.
+typewr.c: Echo chars by using the receiver interrupt in the UART.
+
+gdb.script: Example session using remote gdb, in two windows, for
+   example, from an X terminal.
+
+gdb-onewindow.txt: Discussion of dialin access with one window--do
+  you have to do it?  If you do, how to use remote gdb with C job
+  control.
+gdb-onewindow.script: script of a run debugging test.lnx with one
+  window and C job control.
+
